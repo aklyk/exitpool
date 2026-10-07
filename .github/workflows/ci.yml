@@ -1,0 +1,23 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Syntax
+        run: |
+          python3 -m py_compile lib/*.py happ/runtime/*.py tools/*.py
+          node --check webui/app.js
+          bash -n setup.sh install.sh uninstall.sh bootstrap/exitpool-install.sh release/build-binaries.sh
+      - name: shellcheck
+        run: shellcheck -S warning setup.sh install.sh uninstall.sh bootstrap/exitpool-install.sh release/build-binaries.sh
+      - name: Release archive builds
+        run: python3 tools/make_release.py --out dist

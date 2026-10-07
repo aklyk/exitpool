@@ -1,0 +1,8 @@
+[Unit]
+Description=exitpool loopback entry 127.0.0.1 for AWG exit %i
+PartOf=exitpool-awg@%i.service
+
+[Socket]
+# ListenStream comes from a per-exit drop-in written by exitpool (port of that exit).
+FreeBind=no
+NoDelay=yes

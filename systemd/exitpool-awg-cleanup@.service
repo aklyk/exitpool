@@ -1,0 +1,11 @@
+[Unit]
+Description=exitpool cleanup of AWG exit %i (outside the exit's cgroup)
+Before=exitpool-awg@%i.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/exitpool/lib/awgnet.py cleanup-if-dead %i
+TimeoutStartSec=30
+MemoryMax=96M
+OOMScoreAdjust=-250
+LimitCORE=0

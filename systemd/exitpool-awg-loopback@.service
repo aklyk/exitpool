@@ -1,0 +1,17 @@
+[Unit]
+Description=exitpool loopback proxy to the relay of AWG exit %i
+Requires=exitpool-awg-loopback@%i.socket
+After=exitpool-awg-loopback@%i.socket
+PartOf=exitpool-awg@%i.service
+
+[Service]
+# TARGET (10.250.<slot>.2:<port>) comes from /etc/exitpool/instances/%i.loopback.env.
+EnvironmentFile=/etc/exitpool/instances/%i.loopback.env
+ExecStart=/usr/lib/systemd/systemd-socket-proxyd ${TARGET}
+DynamicUser=yes
+CapabilityBoundingSet=
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+MemoryMax=16M

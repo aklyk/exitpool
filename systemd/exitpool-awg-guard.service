@@ -1,0 +1,13 @@
+[Unit]
+Description=exitpool network guard (blackhole routes of AWG exits, host forward guard)
+DefaultDependencies=no
+After=local-fs.target
+Before=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/python3 /opt/exitpool/lib/awgnet.py guard-all
+
+[Install]
+WantedBy=multi-user.target

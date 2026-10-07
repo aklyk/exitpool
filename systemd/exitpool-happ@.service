@@ -1,0 +1,29 @@
+[Unit]
+Description=exitpool Happ exit %i (Docker, no TUN)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Environment=MEMORY_LIMIT=384m MEMORY_SWAP=512m
+EnvironmentFile=/etc/exitpool/instances/%i.env
+ExecStartPre=-/usr/bin/docker rm -f exitpool-%i
+ExecStart=/usr/bin/docker run --rm --name exitpool-%i \
+  --network exitpool-happ --cap-drop ALL --security-opt no-new-privileges \
+  --read-only --pids-limit 256 --memory ${MEMORY_LIMIT} --memory-swap ${MEMORY_SWAP} \
+  --tmpfs /tmp:rw,nosuid,nodev,size=64m --tmpfs /run:rw,nosuid,nodev,size=32m \
+  --publish 127.0.0.1:${PORT}:${PORT}/tcp \
+  --mount type=bind,src=/var/lib/exitpool/%i,dst=/state \
+  --mount type=bind,src=/etc/exitpool/instances/%i.json,dst=/run/config.json,readonly \
+  --mount type=bind,src=/etc/exitpool/subscription.secret,dst=/run/secrets/subscription,readonly \
+  --log-opt max-size=2m --log-opt max-file=2 exitpool-happ:4.3.0-318
+ExecStop=-/usr/bin/docker stop -t 8 exitpool-%i
+Restart=always
+RestartSec=30
+TimeoutStartSec=180
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>exitpool</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>exitpool</h1>
+    <span id="updated" class="muted small"></span>
+  </div>
+  <nav id="tabs" class="tabs" hidden>
+    <button type="button" data-tab="status" class="tab active">Статус</button>
+    <button type="button" data-tab="subscription" class="tab">Подписка</button>
+    <button type="button" data-tab="access" class="tab">Настройки</button>
+  </nav>
+</header>
+
+<main>
+  <section id="login" class="panel narrow" hidden>
+    <h2>Вход</h2>
+    <form id="login-form" autocomplete="on">
+      <label for="login-password">Пароль</label>
+      <input id="login-password" type="password" autocomplete="current-password" required>
+      <button type="submit" class="primary wide">Войти</button>
+      <p id="login-error" class="error" role="alert"></p>
+    </form>
+  </section>
+
+  <section id="view-status" hidden>
+    <div id="summary" class="summary"></div>
+    <div id="instances" class="cards"></div>
+    <div id="host" class="host muted small"></div>
+    <div id="awg-add-panel" class="panel" hidden>
+      <h2>Добавить AWG-выход</h2>
+      <p class="muted small">Профиль AmneziaWG (.conf) с полным туннелем, как его выдаёт провайдер. Ключи хранятся только
+        на сервере и в браузер не возвращаются. Один профиль — один выход: не включайте его одновременно на телефоне.
+        Новый выход появится в панели 3x-ui после добавления socks-исходящего с тегом и адресом, показанными на карточке
+        (10.250.N.2:порт — доступен только с этого сервера).</p>
+      <form id="awg-form" autocomplete="off">
+        <div class="row">
+          <div><label for="awg-name">Имя выхода</label>
+            <input id="awg-name" required maxlength="24" autocapitalize="off" spellcheck="false" placeholder="например fi2"></div>
+          <div><label for="awg-tag">Тег в 3x-ui</label>
+            <input id="awg-tag" maxlength="64" autocapitalize="off" spellcheck="false" placeholder="awg-имя"></div>
+          <div><label for="awg-country">Только страна (код)</label>
+            <input id="awg-country" maxlength="2" autocapitalize="characters" placeholder="любая"></div>
+          <div><label for="awg-label">Подпись</label>
+            <input id="awg-label" maxlength="80" placeholder="необязательно"></div>
+        </div>
+        <div id="awg-memory-slot"></div>
+        <label for="awg-file">Файл профиля .conf</label>
+        <input id="awg-file" type="file" accept=".conf,text/plain">
+        <label for="awg-text">или текст профиля</label>
+        <textarea id="awg-text" rows="5" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="[Interface]…"></textarea>
+        <button type="submit" class="primary wide">Добавить выход</button>
+        <p id="awg-error" class="error" role="alert"></p>
+      </form>
+      <div id="awg-job"></div>
+    </div>
+  </section>
+
+  <section id="view-subscription" hidden>
+    <div class="panel">
+      <h2>Текущая подписка</h2>
+      <p id="sub-current"></p>
+    </div>
+    <div class="panel" id="job-panel">
+      <h2>Заменить подписку</h2>
+      <div id="replace-start">
+        <p class="muted small">Вставьте новую ссылку <code>happ://crypt5/…</code>. Временный Happ прочитает профили,
+          затем вы выберете профиль для каждого выхода. Теги и порты выходов в панели не меняются.</p>
+        <label for="sub-key">Новая ссылка</label>
+        <textarea id="sub-key" rows="4" autocomplete="off" autocapitalize="off" spellcheck="false"
+                  placeholder="happ://crypt5/…"></textarea>
+        <button type="button" id="discover" class="primary wide">Прочитать профили</button>
+      </div>
+      <div id="job"></div>
+    </div>
+    <div class="panel">
+      <h2>Резервные копии</h2>
+      <p class="muted small">Создаются перед каждой заменой подписки. Восстановление возвращает ключ,
+        настройки и импортированную подписку, выходы перезапускаются по одному.</p>
+      <div id="backups"></div>
+    </div>
+  </section>
+
+  <section id="view-access" hidden>
+    <div class="panel narrow">
+      <h2>Панель 3x-ui (необязательно)</h2>
+      <p class="muted small">Показывает на карточках, какой выход сейчас выбран балансером, и задержку по оценке
+        балансера. Токен хранится только на сервере и в браузер не возвращается; используются только запросы на чтение.</p>
+      <form id="panel-form" autocomplete="off">
+        <label for="panel-host">Адрес панели (IP)</label>
+        <input id="panel-host" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="192.168.1.10" required>
+        <div class="row">
+          <div><label for="panel-port">Порт</label><input id="panel-port" type="number" inputmode="numeric" min="1" max="65535" required></div>
+          <div><label for="panel-base">Базовый путь</label><input id="panel-base" autocapitalize="off" spellcheck="false" placeholder="если задан"></div>
+        </div>
+        <label for="panel-token">API-токен</label>
+        <input id="panel-token" type="password" autocomplete="off" spellcheck="false">
+        <label class="check"><input type="checkbox" id="panel-https"> HTTPS</label>
+        <label class="check"><input type="checkbox" id="panel-enabled" checked> Показывать выбор балансера</label>
+        <button type="submit" class="primary wide">Сохранить и проверить</button>
+        <button type="button" id="panel-clear" class="wide">Удалить настройки панели</button>
+        <p id="panel-state" class="small muted"></p>
+        <p id="panel-error" class="error" role="alert"></p>
+      </form>
+    </div>
+    <div class="panel narrow">
+      <h2>Сменить пароль</h2>
+      <form id="password-form">
+        <label for="pw-current">Текущий пароль</label>
+        <input id="pw-current" type="password" autocomplete="current-password" required>
+        <label for="pw-new">Новый пароль (от 8 символов)</label>
+        <input id="pw-new" type="password" autocomplete="new-password" minlength="8" required>
+        <label for="pw-repeat">Повторите новый пароль</label>
+        <input id="pw-repeat" type="password" autocomplete="new-password" minlength="8" required>
+        <button type="submit" class="primary wide">Сменить пароль</button>
+        <p id="password-error" class="error" role="alert"></p>
+      </form>
+    </div>
+    <div class="panel narrow">
+      <button type="button" id="logout" class="wide">Выйти</button>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+name: reproduce
+# Releases are published with the AWG binaries that passed the tests on a real Ubuntu 24.04 machine.
+# This workflow shows independently that those binaries are rebuilt bit for bit from the pinned sources
+# (release/versions.env) and that the published files match SHA256SUMS.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reproduce:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Rebuild AWG binaries from pinned sources
+        run: sudo env EXITPOOL_KEEP_BUILD_TOOLS=1 bash release/build-binaries.sh "$PWD/out"
+      - name: Compare with release/binaries.json
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, sys
+          manifest = json.load(open('release/binaries.json'))['files']
+          bad = []
+          for name, info in manifest.items():
+              actual = hashlib.sha256(open(f'out/{name}', 'rb').read()).hexdigest()
+              print(f'{name:13} {actual} {"OK" if actual == info["sha256"] else "DIFFERS from " + info["sha256"]}')
+              if actual != info['sha256']:
+                  bad.append(name)
+          if bad:
+              sys.exit('Not reproduced bit for bit: ' + ', '.join(bad))
+          PY
+      - name: Published files match SHA256SUMS
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "${{ github.event.release.tag_name }}" -D assets
+          cd assets && sha256sum -c SHA256SUMS

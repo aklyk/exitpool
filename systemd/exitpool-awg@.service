@@ -1,0 +1,29 @@
+[Unit]
+Description=exitpool AmneziaWG exit %i (no Docker)
+Wants=network-online.target exitpool-awg-guard.service
+After=network-online.target exitpool-awg-guard.service exitpool-awg-cleanup@%i.service
+# Cleanup runs in its own cgroup: an OOM of this unit cannot kill it.
+OnFailure=exitpool-awg-cleanup@%i.service
+OnSuccess=exitpool-awg-cleanup@%i.service
+StartLimitIntervalSec=120
+StartLimitBurst=20
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/python3 /opt/exitpool/lib/awgnet.py cleanup %i
+ExecStart=/usr/bin/python3 /opt/exitpool/lib/awgnet.py run %i
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+KillMode=control-group
+Environment=PYTHONDONTWRITEBYTECODE=1
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_SYS_ADMIN CAP_DAC_OVERRIDE CAP_SETPCAP
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+MemoryAccounting=yes
+MemoryMax=128M
+OOMScoreAdjust=500
+LimitCORE=0
+
+[Install]
+WantedBy=multi-user.target

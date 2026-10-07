@@ -1,0 +1,13 @@
+{
+  "version": "2.0.0",
+  "platform": "ubuntu-24.04-amd64",
+  "base_url": "https://github.com/aklyk/exitpool/releases/download/v2.0.0/",
+  "files": {
+    "amneziawg-go": {"sha256": "d20776e2295143e8943d931de7a25d10ab677571f89ec48eaa92d84ca098f6b9",
+                     "source": "amneziawg-go v3.1.20260828 b5928efb6ca19f0153958460c3d141f04abc5c2e, CGO_ENABLED=0 -trimpath -s -w"},
+    "awg": {"sha256": "182aabc3a79a322994da0ab388454d544c32b64433b66eb92f9e084c133984cd",
+            "source": "amneziawg-tools v3.1.20260812 ee0f0a9aa34ff0a0da4b3433b9512781cfe02843, musl static"},
+    "xray": {"sha256": "c4ae6798c38e0e5343b192406746333cd0ba7ff3eb984f8c4b9939dcb68c3f8a",
+             "source": "official Xray-core v26.9.9 Xray-linux-64.zip (zip sha256 1eb9175d…b7df)"}
+  }
+}

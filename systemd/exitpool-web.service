@@ -1,0 +1,19 @@
+[Unit]
+Description=exitpool web interface (LAN)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/exitpool/lib/web.py serve
+# The listen address may appear only after DHCP/netplan; retry instead of failing.
+Restart=always
+RestartSec=5
+UMask=0077
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=true
+MemoryMax=192M
+
+[Install]
+WantedBy=multi-user.target
