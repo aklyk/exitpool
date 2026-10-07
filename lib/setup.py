@@ -181,7 +181,8 @@ def memory_hints(facts, parts):
 def choose_parts(facts, installed=None, force=False):
     installed = installed or {}
     has_happ = any(c.get('kind', 'happ') == 'happ' for c in installed.values())
-    web_on = (paths.ETC/'web.json').exists()
+    web_configured = (paths.ETC/'web.json').exists()
+    web_active = web_configured and run(['systemctl', 'is-active', 'exitpool-web.service']).stdout.strip() == 'active'
     parts = {'awg': facts['awg_ok'], 'happ': False, 'web': False}
     happ_note = 'нужен Docker ~90 МиБ, его нет; образ ~1 ГБ' if facts['docker'] == 'missing' else 'образ ~1 ГБ'
     while True:
@@ -189,7 +190,8 @@ def choose_parts(facts, installed=None, force=False):
                  f'~{mb.awg_budget(mb.AWG_DEFAULT_MODE)} МиБ каждый (режим 64)' if facts['awg_ok'] else 'недоступно здесь'),
                 ('happ', 'Happ-выходы (подписка happ://crypt5)',
                  'уже установлены — подписка: exitpool subscription' if has_happ else f'~256 МиБ каждый, {happ_note}'),
-                ('web', 'веб-интерфейс (управление с телефона в LAN)', 'уже включён' if web_on else f'~{mb.WEB_MIB} МиБ')]
+                ('web', 'веб-интерфейс (управление с телефона в LAN)',
+                 'уже включён' if web_active else 'настроен, служба выключена' if web_configured else f'~{mb.WEB_MIB} МиБ')]
         say('\nЧто поставить?')
         for index, (key, title, cost) in enumerate(rows, 1):
             say(f"  {index} [{'x' if parts[key] else ' '}] {title:46} {cost}")
@@ -219,8 +221,10 @@ def choose_parts(facts, installed=None, force=False):
         elif key == 'happ' and facts['docker'] in ('down', 'old') and not parts['happ']:
             say('Docker есть, но '+('служба недоступна' if facts['docker'] == 'down' else 'версия старше 28')
                 + ': исправьте его отдельно, мастер Docker не переустанавливает.')
-        elif key == 'web' and web_on:
+        elif key == 'web' and web_active:
             say('Веб уже включён: sudo exitpool web show|disable|passwd')
+        elif key == 'web' and web_configured:
+            say('Веб настроен, но служба выключена. Включить с прежним адресом и паролем: sudo exitpool web enable')
         else:
             parts[key] = not parts[key]
 

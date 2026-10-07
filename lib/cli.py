@@ -161,13 +161,16 @@ def show_status(names=(), as_json=False):
             print('    ошибка:', s['error'])
         if s['kind'] == 'awg':
             t = s.get('tunnel') or {}
-            hs = f"{dur(t['handshake_age'])} назад" if t.get('handshake_age') is not None else '—'
-            print(f"    AWG: {s['profile']} · сервер {t.get('endpoint') or '?'} · рукопожатие {hs} · "
-                  f"↓{(t.get('rx') or 0)//2**20} МиБ ↑{(t.get('tx') or 0)//2**20} МиБ · "
-                  f"режим памяти {s['memory_mode']} МиБ (ожидаемо ~{s['budget_mib']}), сейчас {s.get('memory_mib') or '?'} МиБ")
+            parts = [f"AWG: {s['profile']}", f"сервер {t.get('endpoint') or '?'}"]
+            if 'rx' in t:   # live values are present only while the exit runs
+                hs = f"{dur(t['handshake_age'])} назад" if t.get('handshake_age') is not None else '—'
+                parts += [f'рукопожатие {hs}', f"↓{(t.get('rx') or 0)//2**20} МиБ ↑{(t.get('tx') or 0)//2**20} МиБ"]
+            parts.append(f"режим памяти {s['memory_mode']} МиБ (ожидаемо ~{s['budget_mib']})"
+                         + (f", сейчас {s['memory_mib']} МиБ" if s.get('memory_mib') else ''))
+            print('    '+' · '.join(parts))
         else:
-            print(f"    Happ: «{s['profile']}» · RAM {s.get('memory_mib') or '?'} МиБ · "
-                  f"подписка {s.get('subscription_updated') or 'не загружена'}")
+            print(f"    Happ: «{s['profile']}»" + (f" · RAM {s['memory_mib']} МиБ" if s.get('memory_mib') else '')
+                  + f" · подписка {s.get('subscription_updated') or 'не загружена'}")
         day = s['day']
         print(f"    24 ч: {day['availability'] if day['availability'] is not None else '?'}% · "
               f"простоев {day['outages']} ({dur(day['downtime'])}) · перезапусков {s['unit']['restarts']}")

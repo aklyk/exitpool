@@ -637,6 +637,26 @@ class AwgWebTests(WebBase):
         item = next(i for i in status['instances'] if i['name'] == 'fi3')
         self.assertEqual((item['address'], item['memory_mode'], item['budget_mib']), (f"127.0.0.1:{value['port']}", 128, 160))
 
+    def test_stopped_exit_hides_last_run_tunnel_numbers(self):
+        self.add()
+        self.wait_job(('done', 'failed'))
+        running = next(i for i in ops.status()['instances'] if i['name'] == 'fi2')
+        self.assertEqual((running['tunnel']['handshake_age'], running['tunnel']['rx']), (12, 2048))
+        ops.service('fi2', 'stop')
+        stopped = next(i for i in ops.status()['instances'] if i['name'] == 'fi2')
+        self.assertEqual(stopped['phase'], 'stopped')
+        self.assertEqual(stopped['tunnel'], {'endpoint': '192.0.2.10:51820', 'mtu': 1280})
+        import contextlib
+        import io
+        import cli
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            cli.show_status(['fi2'])
+        text = out.getvalue()
+        self.assertIn('сервер 192.0.2.10:51820', text)
+        for stale in ('рукопожатие', '↓', 'сейчас ?'):
+            self.assertNotIn(stale, text)
+
     def test_memory_check_refuses_exit_that_does_not_fit(self):
         with mock.patch.object(ops, 'read_memory', return_value=MemoryBudget(512, 90)):
             status, value, _, _ = self.add(name='fi5')

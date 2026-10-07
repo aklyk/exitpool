@@ -392,12 +392,14 @@ def instance_view(name, cfg, unit_info, now, memory_mib=None):
     checks = state.get('checks') or {}
     awg = kind_of_cfg(cfg) == 'awg'
     tunnel = state.get('tunnel') if awg and isinstance(state.get('tunnel'), dict) else {}
+    # Handshake and traffic are live values: a stopped, starting or silent exit would show the last run's numbers.
+    live = ('handshake_age', 'rx', 'tx') if phase not in ('stopped', 'stale', 'starting') else ()
     return {
         'name': name, 'kind': 'awg' if awg else 'happ', 'tag': cfg['tag'], 'port': cfg['port'],
         'profile': (cfg.get('label') or 'AmneziaWG') if awg else cfg.get('profile_name', cfg.get('profile_query', '')),
         'exact': awg or 'profile_name' in cfg, 'country': cfg.get('country', ''),
         'settings': {k: cfg[k] for k in (AWG_EDITABLE if awg else EDITABLE) if k in cfg},
-        'tunnel': {k: tunnel.get(k) for k in ('endpoint', 'mtu', 'handshake_age', 'rx', 'tx', 'relay') if k in tunnel},
+        'tunnel': {k: tunnel.get(k) for k in ('endpoint', 'mtu', 'relay', *live) if k in tunnel},
         'address': f"{relay_address(cfg)}:{cfg['port']}",
         'memory_mode': cfg['memory_mib'] if awg else None,
         'budget_mib': awg_budget(cfg['memory_mib']) if awg else PER_INSTANCE_MIB,

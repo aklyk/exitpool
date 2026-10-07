@@ -213,6 +213,23 @@ class WizardTests(unittest.TestCase):
         with answers('', ''), contextlib.redirect_stdout(io.StringIO()):   # current custom value is the default
             self.assertEqual(cli.choose_memory('fi', 48), 48)
 
+    def test_web_configured_but_stopped_is_not_called_enabled(self):
+        with tempfile.TemporaryDirectory() as d:
+            ops.set_root(d)
+            self.addCleanup(ops.set_root, '/')
+            paths.ETC.mkdir(parents=True)
+            (paths.ETC/'web.json').write_text('{}')
+            facts = {'available': 2000, 'docker': 'ready', 'awg_ok': True}
+            for state, label, hint in (('inactive', 'настроен, служба выключена', 'sudo exitpool web enable'),
+                                       ('active', 'уже включён', 'Веб уже включён')):
+                out = io.StringIO()
+                with mock.patch.object(wizard, 'run', return_value=mock.Mock(stdout=state+'\n')), \
+                        answers('3', ''), contextlib.redirect_stdout(out):
+                    parts = wizard.choose_parts(facts, {})
+                self.assertIn(label, out.getvalue())
+                self.assertIn(hint, out.getvalue())
+                self.assertFalse(parts['web'])   # never re-asked: the saved address and password stay
+
     def test_budget_lines(self):
         facts = {'available': 300, 'docker': 'ready'}
         parts = {'awg': True, 'happ': False, 'web': False}
