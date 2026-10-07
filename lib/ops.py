@@ -574,10 +574,12 @@ def panel_public(cfg):
 def save_panel(data):
     cfg = validate_panel(data, load_panel())
     if cfg['enabled']:
-        try:
-            PanelClient(panel_url(cfg), cfg['token']).balancers()   # prove access before saving
+        from panel_outbounds import connect
+        try:   # prove access before saving; a wrong http/https choice is corrected
+            client, _ = connect(panel_url(cfg), cfg['token'], check=lambda c: c.balancers())
         except (PanelError, ValueError) as exc:
             raise OpsError('Панель не ответила: '+str(exc)) from None
+        cfg['scheme'] = client.scheme
     write_file(panel_path(), json.dumps(cfg, indent=2)+'\n', 0o600)
     PanelMonitor.generation += 1   # the web page re-reads the balancer list right away
     return panel_public(cfg)

@@ -263,7 +263,7 @@ def outbounds(args):
         print('\nДобавьте эти socks-исходящие в 3x-ui (или: sudo exitpool outbounds --add).', file=sys.stderr)
         return
     need_root()
-    from panel_outbounds import PanelClient, PanelError
+    from panel_outbounds import PanelError, connect
     cfg = ops.load_panel()
     if cfg:
         url, token = ops.panel_url(cfg), cfg['token']
@@ -271,7 +271,9 @@ def outbounds(args):
         url = ask('Адрес панели (http://127.0.0.1:ПОРТ/базовый-путь)')
         token = getpass.getpass('API-токен панели (скрытый ввод): ').strip()
     try:
-        client = PanelClient(url, token)
+        client, note = connect(url, token)
+        if note:
+            print(note)
         tags = client.add(items, paths.VAR/'panel-backups')
     except (PanelError, ValueError) as exc:
         raise CliError(str(exc)) from None
@@ -512,6 +514,11 @@ def menu():
             print('\n'+str(exc))
         except KeyboardInterrupt:
             print('\nОтменено.')
+        except Exception as exc:  # noqa: BLE001 - the menu must survive any single action
+            if os.environ.get('EXITPOOL_DEBUG'):
+                raise
+            print(f'\nНе получилось: {type(exc).__name__}: {str(exc)[:200]}. '
+                  'Подробности: EXITPOOL_DEBUG=1 sudo -E exitpool')
 
 
 def pick_exit():
@@ -693,6 +700,12 @@ def main(argv=None):
     except (KeyboardInterrupt, EOFError):
         print('\nОтменено.', file=sys.stderr)
         return 130
+    except Exception as exc:  # noqa: BLE001 - a short message instead of a traceback
+        if os.environ.get('EXITPOOL_DEBUG'):
+            raise
+        print(f'Не получилось: {type(exc).__name__}: {str(exc)[:200]}. Подробности: EXITPOOL_DEBUG=1 sudo -E exitpool …',
+              file=sys.stderr)
+        return 1
 
 
 if __name__ == '__main__':

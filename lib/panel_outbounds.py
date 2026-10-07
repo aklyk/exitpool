@@ -4,9 +4,12 @@ import argparse
 import copy
 import datetime
 import getpass
+import http.client
+import ipaddress
 import json
 import os
 from pathlib import Path
+import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -15,7 +18,22 @@ from configuration import load_instances, make_outbounds
 
 
 class PanelError(RuntimeError):
-    pass
+    """kind 'scheme' means the other protocol (http <-> https) is likely right; connect() retries it once."""
+    def __init__(self, message, kind=None):
+        super().__init__(message)
+        self.kind = kind
+
+
+DROPPED = 'Панель оборвала соединение — похоже, она работает по HTTPS: адрес должен начинаться с https://'
+
+
+def is_loopback(host):
+    if host in ('localhost', 'localhost.localdomain'):
+        return True
+    try:
+        return ipaddress.ip_address(host.strip('[]')).is_loopback
+    except ValueError:
+        return False
 
 
 def normalize_url(value):
@@ -48,7 +66,13 @@ class PanelClient:
         self.token = token.strip()
         if not self.token or any(c.isspace() for c in self.token):
             raise ValueError('API-токен пустой или содержит пробелы.')
-        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+        self.host = urllib.parse.urlsplit(self.url).hostname or ''
+        self.scheme = urllib.parse.urlsplit(self.url).scheme
+        # A panel on this server is reached over loopback, while its certificate names the public domain:
+        # there is nothing to verify on 127.0.0.1. Remote panels keep full certificate checks.
+        context = ssl._create_unverified_context() if is_loopback(self.host) else ssl.create_default_context()
+        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect(),
+                                                  urllib.request.HTTPSHandler(context=context))
 
     def api(self, path, form, method='POST', timeout=90):
         data = urllib.parse.urlencode(form).encode() if method == 'POST' else None
@@ -58,11 +82,42 @@ class PanelClient:
             with self.opener.open(req, timeout=timeout) as response:
                 result = json.load(response)
         except urllib.error.HTTPError as exc:
-            code = exc.code
+            code, location = exc.code, exc.headers.get('Location', '') if exc.headers else ''
             exc.close()
-            raise PanelError(f'Панель вернула HTTP {code}; проверьте URL, базовый путь и API-токен.') from None
-        except (urllib.error.URLError, TimeoutError, ValueError, OSError):
-            raise PanelError('Не удалось получить ответ API панели; проверьте адрес, TLS и доступность.') from None
+            if self.scheme == 'http' and 300 <= code < 400 and location.startswith('https:'):
+                raise PanelError('Панель работает по HTTPS: адрес должен начинаться с https://', 'scheme') from None
+            if self.scheme == 'http' and code == 400:
+                raise PanelError('Панель вернула HTTP 400 — так HTTPS-порт отвечает на запрос по http://. '
+                                 'Если панель по HTTPS, адрес должен начинаться с https://', 'scheme') from None
+            hint = (' 403 часто значит, что в панели задан домен (Panel Domain): подключайтесь по нему.'
+                    if code == 403 else '')
+            raise PanelError(f'Панель вернула HTTP {code}; проверьте URL, базовый путь и API-токен.{hint}') from None
+        except http.client.HTTPException:
+            # e.g. "UnknownProtocol: HTTP/0.0": an HTTPS port answered a plain-HTTP request.
+            if self.scheme == 'http':
+                raise PanelError('Панель ответила не по HTTP — похоже, она работает по HTTPS: '
+                                 'адрес должен начинаться с https://', 'scheme') from None
+            raise PanelError('Панель ответила не по протоколу HTTP; проверьте адрес и порт.') from None
+        except urllib.error.URLError as exc:
+            reason = exc.reason
+            if isinstance(reason, ssl.SSLCertVerificationError):
+                raise PanelError('Сертификат панели не прошёл проверку ('+(reason.verify_message or 'ошибка')+'). '
+                                 'Для панели на этом же сервере укажите https://127.0.0.1:ПОРТ/…') from None
+            if isinstance(reason, ssl.SSLError) and self.scheme == 'https':
+                detail = getattr(reason, 'reason', None) or str(reason)
+                raise PanelError(f'TLS-соединение с панелью не установилось ({detail}); '
+                                 'если панель работает без HTTPS, адрес должен начинаться с http://', 'scheme') from None
+            if isinstance(reason, (ConnectionResetError, BrokenPipeError)) and self.scheme == 'http':
+                raise PanelError(DROPPED, 'scheme') from None
+            raise PanelError(f'Не удалось подключиться к панели: {reason}.') from None
+        except (ConnectionResetError, BrokenPipeError) as exc:
+            if self.scheme == 'http':   # a TLS port drops a plain-HTTP request
+                raise PanelError(DROPPED, 'scheme') from None
+            raise PanelError(f'Панель оборвала соединение: {type(exc).__name__}.') from None
+        except (TimeoutError, OSError) as exc:
+            raise PanelError(f'Не удалось получить ответ панели: {type(exc).__name__}.') from None
+        except ValueError:
+            raise PanelError('Панель вернула не JSON; проверьте URL и базовый путь.') from None
         if not isinstance(result, dict) or not result.get('success'):
             # Server messages may contain request data; do not echo them with secrets.
             raise PanelError('API панели отклонил запрос. Проверьте токен и совместимость с 3x-ui 3.8.x.')
@@ -140,6 +195,29 @@ class PanelClient:
             raise PanelError('Проверка сохранённого шаблона не совпала. Остановитесь и проверьте резервную копию.')
         tags = {o.get('tag') for o in old['outbounds']}
         return [o['tag'] for o in additions if o['tag'] not in tags]
+
+
+def connect(url, token, check=None):
+    """PanelClient whose address is proven: check(client) (default: read the template) must succeed.
+
+    A wrong protocol (http vs https) is fixed automatically once. Returns (client, note); note is a text
+    for the user when the address was corrected, otherwise None.
+    """
+    check = check or (lambda c: c.read())
+    client = PanelClient(url, token)
+    try:
+        check(client)
+        return client, None
+    except PanelError as exc:
+        if exc.kind != 'scheme':
+            raise
+        other = ('https' if client.scheme == 'http' else 'http')+client.url[len(client.scheme):]
+        second = PanelClient(other, token)
+        try:
+            check(second)
+        except PanelError:
+            raise exc from None
+        return second, f'Панель отвечает по {second.scheme.upper()}: использую {second.scheme}://.'
 
 
 def prepare_template(old, additions):

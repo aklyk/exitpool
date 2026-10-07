@@ -317,6 +317,9 @@ class RemovalRaceTests(RootedTest):
         import awgnet
         self.awgnet = awgnet
         (paths.ETC/'instances'/'fi.json').write_text(json.dumps({'kind': 'awg', 'port': 11838, 'slot': 2}))
+        uapi = mock.patch.object(awgnet, 'UAPI_DIR', self.root/'uapi')   # never the host's /var/run/amneziawg
+        uapi.start()
+        self.addCleanup(uapi.stop)
         self.calls = []
         patch = mock.patch.object(awgnet, 'run', side_effect=lambda args, **k: self.calls.append([str(a) for a in args])
                                   or mock.Mock(returncode=0, stdout=''))

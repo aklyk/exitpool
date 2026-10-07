@@ -539,7 +539,7 @@ def web_url(cfg):
 
 def ask_panel(planned_tags):
     """3x-ui: 0 — do not link, 1 — add outbounds now (token in memory), 2 — add and keep the token for status."""
-    from panel_outbounds import PanelClient, PanelError, normalize_url
+    from panel_outbounds import PanelError, connect, normalize_url
     say('\nСвязь с 3x-ui:')
     say('  1 — не связывать: в конце покажу готовый JSON исходящих, вставите в панель сами')
     say('  2 — добавить исходящие сейчас (API-токен нужен только на время установки и не сохраняется)')
@@ -553,7 +553,10 @@ def ask_panel(planned_tags):
             token = getpass.getpass('API-токен панели (скрытый ввод): ').strip()
             if token.lower().startswith('bearer '):
                 token = token[7:].strip()
-            client = PanelClient(url, token)
+            client, note = connect(url, token)
+            if note:
+                say(note)
+                url = client.url
             template = client.setting(client.read())
             clash = sorted({o.get('tag') for o in template['outbounds']} & set(planned_tags))
             if clash:

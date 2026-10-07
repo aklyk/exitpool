@@ -14,6 +14,7 @@ import sys
 import tempfile
 import threading
 import unittest
+import urllib.request
 from unittest import mock
 
 SOURCE = Path(__file__).resolve().parents[1]
@@ -67,7 +68,7 @@ class ConfigTests(unittest.TestCase):
 
 
 class FakePanel:
-    def __init__(self):
+    def __init__(self, tls=None):
         self.old={'outbounds':[{'tag':'direct','protocol':'freedom'},{'tag':'warp','protocol':'socks','settings':{'port':64900}}],
                   'routing':{'rules':[{'inboundTag':['home'],'balancerTag':'old'}],
                              'balancers':[{'tag':'old','selector':['warp']}]},'dns':{'servers':['localhost']}}
@@ -102,6 +103,10 @@ class FakePanel:
                 raw=json.dumps(body).encode();self.send_response(200);self.send_header('Content-Type','application/json')
                 self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
         self.server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Handler)
+        if tls:   # (certificate, key): an HTTPS panel like 3x-ui with its own certificate
+            import ssl
+            context=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);context.load_cert_chain(*tls)
+            self.server.socket=context.wrap_socket(self.server.socket,server_side=True)
         self.thread=threading.Thread(target=self.server.serve_forever,daemon=True);self.thread.start()
         self.url=f'http://127.0.0.1:{self.server.server_port}/base/panel/outbound'
         self.client=panel.PanelClient(self.url,'example-token')
@@ -161,6 +166,83 @@ class PanelTests(unittest.TestCase):
 def answers(*values):
     items = iter(values)
     return mock.patch('builtins.input', side_effect=lambda _='': next(items))
+
+
+def self_signed(directory):
+    """Certificate for a public-looking name, like the panel certificate of a real server."""
+    import shutil, subprocess
+    if not shutil.which('openssl'):
+        raise unittest.SkipTest('openssl is not installed')
+    cert, key = Path(directory)/'cert.pem', Path(directory)/'key.pem'
+    subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=panel.example.net',
+                    '-keyout', str(key), '-out', str(cert)], check=True, capture_output=True)
+    return str(cert), str(key)
+
+
+class PanelProtocolTests(unittest.TestCase):
+    """The panel URL with the wrong protocol, a loopback HTTPS panel with a foreign certificate, garbage answers."""
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+
+    def test_http_address_of_an_https_panel_is_corrected(self):
+        fake = FakePanel(tls=self_signed(self.temp.name))
+        self.addCleanup(fake.close)
+        url = f'http://127.0.0.1:{fake.server.server_port}/base'
+        with self.assertRaises(panel.PanelError) as caught:
+            panel.PanelClient(url, 'example-token').read()
+        self.assertEqual(caught.exception.kind, 'scheme')
+        self.assertIn('https://', str(caught.exception))
+        client, note = panel.connect(url, 'example-token')
+        self.assertEqual(client.scheme, 'https')
+        self.assertIn('HTTPS', note)
+        self.assertEqual(client.add(config.make_outbounds(instances()), Path(self.temp.name)/'b'), ['happ-de', 'happ-fi'])
+
+    def test_https_address_of_a_plain_panel_is_corrected(self):
+        fake = FakePanel()
+        self.addCleanup(fake.close)
+        client, note = panel.connect(f'https://127.0.0.1:{fake.server.server_port}/base', 'example-token')
+        self.assertEqual((client.scheme, 'HTTP' in note), ('http', True))
+
+    def test_garbage_answer_is_a_clear_error_not_a_traceback(self):
+        import socket
+        listener = socket.socket()
+        listener.bind(('127.0.0.1', 0))
+        listener.listen(4)
+        self.addCleanup(listener.close)
+
+        def serve():
+            for _ in range(4):
+                try:
+                    conn, _ = listener.accept()
+                except OSError:
+                    return
+                with conn:
+                    conn.recv(4096)
+                    conn.sendall(b'\x15\x03\x01\x00\x02\x02\x46')   # a TLS alert instead of an HTTP status line
+        threading.Thread(target=serve, daemon=True).start()
+        url = f'http://127.0.0.1:{listener.getsockname()[1]}/base'
+        with self.assertRaises(panel.PanelError) as caught:
+            panel.connect(url, 'SENSITIVE-TOKEN')
+        self.assertIn('https://', str(caught.exception))
+        self.assertNotIn('SENSITIVE', str(caught.exception))
+
+    def test_certificates_are_checked_except_on_loopback(self):
+        for host, verify in (('127.0.0.1', False), ('localhost', False), ('[::1]', False), ('panel.example.net', True),
+                             ('77.223.215.1', True)):
+            client = panel.PanelClient(f'https://{host}:2053/x', 'token')
+            handler = next(h for h in client.opener.handlers if isinstance(h, urllib.request.HTTPSHandler))
+            self.assertEqual(handler._context.check_hostname, verify, host)
+        self.assertTrue(panel.is_loopback('127.0.0.2'))
+        self.assertFalse(panel.is_loopback('10.0.0.1'))
+
+    def test_unexpected_error_in_cli_is_a_short_message(self):
+        import cli
+        err = io.StringIO()
+        with mock.patch.object(cli, 'show_status', side_effect=RuntimeError('boom')), contextlib.redirect_stderr(err):
+            self.assertEqual(cli.main(['status']), 1)
+        self.assertIn('Не получилось: RuntimeError: boom', err.getvalue())
+        self.assertNotIn('Traceback', err.getvalue())
 
 
 class WizardTests(unittest.TestCase):
