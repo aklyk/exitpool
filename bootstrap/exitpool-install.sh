@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # exitpool — загрузчик из gist. Скачивает архив релиза с GitHub, сверяет SHA-256 и запускает мастер.
 #
-#   curl -fsSL https://gist.githubusercontent.com/aklyk/5d7c8f9eb430163320eb5fbce4b0fac8/raw/exitpool-install.sh | sudo bash
-#   curl -fsSL …/exitpool-install.sh | sudo bash -s -- --upgrade
+#   sudo bash -c 'bash <(curl -fsSL https://gist.githubusercontent.com/aklyk/5d7c8f9eb430163320eb5fbce4b0fac8/raw/exitpool-install.sh)'
+#   sudo bash -c 'bash <(curl -fsSL …/exitpool-install.sh) --upgrade'      (под root: bash <(curl -fsSL …))
+#   `sudo bash <(curl …)` не работает: sudo закрывает /dev/fd/63, через который bash читает скрипт.
 #
 # Опции загрузчика:
 #   --version X.Y.Z   другая версия (хеш берётся из SHA256SUMS релиза, а не из этого файла)
@@ -18,7 +19,7 @@ SHA256=@SHA256@
 REPO=aklyk/exitpool
 
 die() { echo "exitpool: $*" >&2; exit 1; }
-[[ $(id -u) -eq 0 ]] || die 'нужны права root: curl -fsSL …/exitpool-install.sh | sudo bash'
+[[ $(id -u) -eq 0 ]] || die "нужны права root: sudo bash -c 'bash <(curl -fsSL …/exitpool-install.sh)'"
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || die 'нужен Linux amd64'
 for tool in curl tar sha256sum python3; do
   command -v "$tool" >/dev/null || die "нет $tool (sudo apt install $tool)"

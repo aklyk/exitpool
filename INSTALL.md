@@ -3,14 +3,19 @@
 ## Быстро
 
 ```sh
-curl -fsSL https://gist.githubusercontent.com/aklyk/5d7c8f9eb430163320eb5fbce4b0fac8/raw/exitpool-install.sh | sudo bash
+sudo bash -c 'bash <(curl -fsSL https://gist.githubusercontent.com/aklyk/5d7c8f9eb430163320eb5fbce4b0fac8/raw/exitpool-install.sh)'
 ```
+
+- Опции — после `)` внутри кавычек: `sudo bash -c 'bash <(curl -fsSL …/exitpool-install.sh) --upgrade'`.
+- Уже root (`sudo -i`): `bash <(curl -fsSL …/exitpool-install.sh) --upgrade`.
+- `sudo bash <(curl …)` не работает: sudo закрывает дескриптор `/dev/fd/63`, через который bash читает скрипт.
+- Через pipe тоже можно: `curl -fsSL …/exitpool-install.sh | sudo bash -s -- --upgrade` — мастер сам переключится на терминал.
 
 Загрузчик из gist короткий, его можно прочитать целиком. Тот же файл есть в каждом релизе:
 `https://github.com/aklyk/exitpool/releases/latest/download/exitpool-install.sh`. Он скачивает `exitpool-X.Y.Z.tar.gz` из релиза
 GitHub, сверяет SHA-256 с записанным в нём значением, распаковывает архив во временную папку и запускает мастер.
 
-Опции загрузчика (после `bash -s --`):
+Опции загрузчика (после `)` в команде выше):
 
 | Опция | Что делает |
 |---|---|
@@ -24,9 +29,11 @@ GitHub, сверяет SHA-256 с записанным в нём значени�
 | `--build-binaries` | собрать бинарники AWG из исходников, не пытаясь скачать |
 | `--force-budget` | продолжать, даже если памяти по оценке не хватает (на свой риск) |
 
-Пример: `curl -fsSL …/exitpool-install.sh | sudo bash -s -- --upgrade --proxy socks5h://127.0.0.1:1080`
+Пример — обновление, когда GitHub доступен только через прокси (`-x` — для самого загрузчика, `--proxy` — для архива и бинарников):
+`sudo bash -c 'bash <(curl -fsSL -x socks5h://127.0.0.1:1080 …/exitpool-install.sh) --upgrade --proxy socks5h://127.0.0.1:1080'`
 
-Прокси с паролем лучше передать переменной: `curl -fsSL …/exitpool-install.sh | sudo EXITPOOL_PROXY='http://user:pass@host:3128' bash`.
+Прокси с паролем лучше передать переменной (так пароль не попадёт в аргументы процессов):
+`sudo EXITPOOL_PROXY='http://user:pass@host:3128' bash -c 'bash <(https_proxy=$EXITPOOL_PROXY curl -fsSL …/exitpool-install.sh)'`.
 
 ## Что спрашивает мастер
 
@@ -71,7 +78,7 @@ GitHub, сверяет SHA-256 с записанным в нём значени�
 ## Перенос с happ-service 1.x
 
 ```sh
-curl -fsSL …/exitpool-install.sh | sudo bash -s -- --upgrade
+sudo bash -c 'bash <(curl -fsSL …/exitpool-install.sh) --upgrade'
 ```
 
 - **Что переносится:** ключ подписки, профили AWG, настройки панели и веба, история событий. Теги и порты прежние.

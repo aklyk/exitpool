@@ -31,8 +31,13 @@
 ## Установка
 
 ```sh
-curl -fsSL https://gist.githubusercontent.com/aklyk/5d7c8f9eb430163320eb5fbce4b0fac8/raw/exitpool-install.sh | sudo bash
+sudo bash -c 'bash <(curl -fsSL https://gist.githubusercontent.com/aklyk/5d7c8f9eb430163320eb5fbce4b0fac8/raw/exitpool-install.sh)'
 ```
+
+Опции пишутся после `)` внутри кавычек, например обновление:
+`sudo bash -c 'bash <(curl -fsSL …/exitpool-install.sh) --upgrade'`. Если вы уже root (`sudo -i`) — просто
+`bash <(curl -fsSL …/exitpool-install.sh)`. Вариант `sudo bash <(curl …)` **не работает**: sudo закрывает дескриптор,
+через который bash читает скрипт (`/dev/fd/63: No such file or directory`).
 
 Мастер покажет, что нашёл на сервере, предложит части с оценкой памяти, спросит профили AWG и режим памяти,
 подписку Happ, веб и связь с 3x-ui, покажет итог и только после «да» начнёт. Подробности, прокси,
