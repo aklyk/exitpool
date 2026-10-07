@@ -1,7 +1,7 @@
 {
-  "version": "2.0.1",
+  "version": "2.0.2",
   "platform": "ubuntu-24.04-amd64",
-  "base_url": "https://github.com/aklyk/exitpool/releases/download/v2.0.1/",
+  "base_url": "https://github.com/aklyk/exitpool/releases/download/v2.0.2/",
   "files": {
     "amneziawg-go": {"sha256": "d20776e2295143e8943d931de7a25d10ab677571f89ec48eaa92d84ca098f6b9",
                      "source": "amneziawg-go v3.1.20260828 b5928efb6ca19f0153958460c3d141f04abc5c2e, CGO_ENABLED=0 -trimpath -s -w"},
